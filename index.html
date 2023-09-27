@@ -1,0 +1,157 @@
+<!doctype html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Huginn - PalomaChain Release Window Planner</title>
+    <style>
+
+    :root {
+      --bg: #eae5e5;
+      --main: #2c2c2c;
+      --accent: #f1d1e5;
+      --hl: #ff62c4;
+    }
+    html {
+    background: var(--bg);
+    scroll-behavior: smooth;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    color: var(--main);
+    }
+
+    html * {
+    transition: all 0.5s;
+    }
+
+    body {
+    display: grid;
+    place-items: center;
+    height: 100vh;
+    }
+
+    section {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    }
+
+    .col {
+    flex: 1 1 150px; /*  Stretching: */
+    margin: 2rem;
+    padding: 1rem;
+    border-radius: 6.537px;
+    background: var(--accent);
+    }
+    
+    .col p {
+    text-wrap: nowrap;
+    }
+
+    a {
+    color: var(--hl);
+    text-decoration: none;
+    }
+
+    a:hover {
+    text-decoration: underline;
+    }
+    </style>
+  </head>
+
+  <body>
+    <h1>Huginn</h1>
+    <h4>PalomaChain Target Block Height Calculator</h4>
+    <section>
+      <div class="col">
+        <h2>Testnet</h2>
+        <p id="testnet.cbh">Current block height:</p>
+        <p id="testnet.cbt">Current block time:</p>
+        <p id="testnet.obt">Block time 10'000 blocks ago:</p>
+        <p id="testnet.bt">Calculated seconds per block:</p>
+        <label for="testnet.landing">Planned chain halt:</label>
+        <input type="datetime-local" id="testnet.landing" oninput="vm.test.calc(this.value)"/>
+        <p id="testnet.tbh">Calculated target block height:</p>
+      </div>
+      <div class="col">
+        <h2>Mainnet</h2>
+        <p id="cbh">Current block height:</p>
+        <p id="cbt">Current block time:</p>
+        <p id="obt">Block time 10'000 blocks ago:</p>
+        <p id="bt">Calculated seconds per block:</p>
+        <label for="landing">Planned chain halt:</label>
+        <input type="datetime-local" id="landing" oninput="vm.main.calc(this.value)"/>
+        <p id="tbh">Calculated target block height:</p>
+      </div>
+    </section>
+    <script type="module">
+
+    function calculate(prefix, data) {
+      const diff = Math.abs(new Date(data.landing) - data.date) / 1000
+      const tbh = (data.block.height + (diff / data.bt)).toFixed(0)
+      document.getElementById(`${prefix}tbh`).innerHTML = `Calculated target block height: <a target="_blank" href="https://${prefix}paloma.explorers.guru/block/${tbh}">${tbh}</a>`
+    }
+
+    async function refresh(prefix) {
+      var response = await fetch(`https://${prefix}paloma.api.explorers.guru/api/v1/blocks?limit=1`);
+      const block  = (await response.json()).data[0];
+      const date = new Date(block.timestamp)
+
+      response = await fetch(`https://${prefix}paloma.api.explorers.guru/api/v1/blocks/${block.height - 10000}`)
+      const oldDate  = new Date((await response.json()).timestamp)
+      const bt = Math.abs(date - oldDate) / 1000 / 10000
+
+      return {
+        block: block,
+        date: date,
+        oldDate: oldDate,
+        bt: bt
+      }
+    }
+
+    function updateUI(prefix, data) {
+      document.getElementById(`${prefix}cbh`).innerHTML = `Current block height: ${data.block.height}`
+      document.getElementById(`${prefix}cbt`).innerHTML = `Current block time: ${data.date.toLocaleString()}`
+      document.getElementById(`${prefix}obt`).innerHTML = `Block time 10'000 blocks ago: ${data.oldDate.toLocaleString()}`
+      document.getElementById(`${prefix}bt`).innerHTML = `Calculated seconds per block: ${data.bt.toFixed(3)} seconds`
+    }
+
+    const vm = {
+      test: {
+        prefix: "testnet.",
+        calc: function(v) {
+          this.data.landing = v;
+          calculate(this.prefix, this.data)
+        },
+        refresh: async function() {
+          console.log(this)
+          this.data = await refresh(this.prefix)
+          updateUI(this.prefix, this.data)
+          if (this.data.landing)
+          calculate(this.prefix, this.data)
+        },
+      },
+      main: {
+        prefix: "",
+        calc: function(v) {
+          this.data.landing = v;
+          calculate(this.prefix, this.data)
+        },
+        refresh: async function() {
+          console.log(this)
+          this.data = await refresh(this.prefix)
+          updateUI(this.prefix, this.data)
+          if (this.data.landing)
+          calculate(this.prefix, this.data)
+        },
+      },
+    }
+
+    vm.test.refresh()
+    vm.main.refresh()
+
+    window.setInterval(() => vm.test.refresh(), 3000)
+    window.setInterval(() => vm.main.refresh(), 3000)
+    window.vm = vm
+    </script>
+  </body>
+</html>
